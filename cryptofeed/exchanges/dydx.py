@@ -75,6 +75,28 @@ class dYdX(Feed, dYdXRestMixin):
                     else:
                         self._l2_book[pair].book[side][price] = amount
             if updated:
+
+                # cross check - sizes at best prices could be wrong until next update at price level
+                book = self._l2_book[pair].book.to_dict()
+                bid_it = iter(book[BID])
+                ask_it = iter(book[ASK])
+                best_bid = next(bid_it, None)
+                best_ask = next(ask_it, None)
+
+                while best_bid > best_ask and best_bid is not None and best_ask is not None:
+                    bid_offset = self._offsets[pair][best_bid]
+                    ask_offset = self._offsets[pair][best_ask]
+                    if bid_offset > ask_offset:
+                        self._offsets[pair][best_ask] = bid_offset
+                        delta[ASK].append((best_ask, Decimal(0)))
+                        del self._l2_book[pair].book[ASK][best_ask]
+                        best_ask = next(ask_it, None)
+                    elif ask_offset > bid_offset:
+                        self._offsets[pair][best_bid] = ask_offset
+                        delta[BID].append((best_bid, Decimal(0)))
+                        del self._l2_book[pair].book[BID][best_bid]
+                        best_bid = next(bid_it, None)
+
                 await self.book_callback(L2_BOOK, self._l2_book[pair], timestamp, delta=delta, raw=msg)
         else:
             # snapshot
