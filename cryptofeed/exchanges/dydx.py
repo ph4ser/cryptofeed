@@ -62,11 +62,11 @@ class dYdX(Feed, dYdXRestMixin):
                     price = Decimal(data[0])
                     amount = Decimal(data[1])
 
-                    if price in self._offsets[pair] and offset < self._offsets[pair][price]:
+                    if price in self._offsets[pair][side] and offset < self._offsets[pair][side][price]:
                         continue
 
                     updated = True
-                    self._offsets[pair][price] = offset
+                    self._offsets[pair][side][price] = offset
                     delta[side].append((price, amount))
 
                     if amount == 0:
@@ -83,16 +83,16 @@ class dYdX(Feed, dYdXRestMixin):
                 best_bid = next(bid_it, None)
                 best_ask = next(ask_it, None)
 
-                while best_bid >= best_ask and best_bid is not None and best_ask is not None:
-                    bid_offset = self._offsets[pair][best_bid]
-                    ask_offset = self._offsets[pair][best_ask]
+                while best_bid is not None and best_ask is not None and best_bid >= best_ask:
+                    bid_offset = self._offsets[pair][BID][best_bid]
+                    ask_offset = self._offsets[pair][ASK][best_ask]
                     if bid_offset > ask_offset:
-                        self._offsets[pair][best_ask] = bid_offset
+                        self._offsets[pair][ASK][best_ask] = bid_offset
                         delta[ASK].append((best_ask, Decimal(0)))
                         del self._l2_book[pair].book[ASK][best_ask]
                         best_ask = next(ask_it, None)
                     elif ask_offset > bid_offset:
-                        self._offsets[pair][best_bid] = ask_offset
+                        self._offsets[pair][BID][best_bid] = ask_offset
                         delta[BID].append((best_bid, Decimal(0)))
                         del self._l2_book[pair].book[BID][best_bid]
                         best_bid = next(bid_it, None)                        
@@ -102,11 +102,13 @@ class dYdX(Feed, dYdXRestMixin):
             # snapshot
             self._l2_book[pair] = OrderBook(self.id, pair, max_depth=self.max_depth)
             self._offsets[pair] = {}
+            self._offsets[pair][BID] = {}
+            self._offsets[pair][ASK] = {}
 
             for side, data in msg['contents'].items():
                 side = BID if side == 'bids' else ASK
                 for entry in data:
-                    self._offsets[pair][Decimal(entry['price'])] = int(entry['offset'])
+                    self._offsets[pair][side][Decimal(entry['price'])] = int(entry['offset'])
                     size = Decimal(entry['size'])
                     if size > 0:
                         self._l2_book[pair].book[side][Decimal(entry['price'])] = size
