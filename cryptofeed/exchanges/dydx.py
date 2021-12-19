@@ -83,7 +83,7 @@ class dYdX(Feed, dYdXRestMixin):
                 best_bid = next(bid_it, None)
                 best_ask = next(ask_it, None)
 
-                while best_bid > best_ask and best_bid is not None and best_ask is not None:
+                while best_bid >= best_ask and best_bid is not None and best_ask is not None:
                     bid_offset = self._offsets[pair][best_bid]
                     ask_offset = self._offsets[pair][best_ask]
                     if bid_offset > ask_offset:
@@ -95,7 +95,7 @@ class dYdX(Feed, dYdXRestMixin):
                         self._offsets[pair][best_bid] = ask_offset
                         delta[BID].append((best_bid, Decimal(0)))
                         del self._l2_book[pair].book[BID][best_bid]
-                        best_bid = next(bid_it, None)
+                        best_bid = next(bid_it, None)                        
 
                 await self.book_callback(L2_BOOK, self._l2_book[pair], timestamp, delta=delta, raw=msg)
         else:
