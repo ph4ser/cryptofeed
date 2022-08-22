@@ -1,6 +1,82 @@
 ## Changelog
 
-### 2.1.2
+### 2.3.0
+ * Bugfix: added list and str support to websocket_endpoint creation (allows more than 200 symbols on Binance)
+ * Feature: Add support for OKx streaming candles
+ * Bugfix: Binance Futures, double slash in open interest url
+ * Update: Set 'next_funding_rate' to None in Bybit if not present
+ * Bugfix: Bitget, bug in subscribe method.
+
+### 2.2.3 (2022-05-29)
+ * Feature: Authenticated channel support for Bitget
+ * New Exchange: FTX TR
+ * New Exchange: AscendEX Futures
+ * Update: AscendEX, add sandbox endpoint. Add channel filter.
+ * Update: Binance, add sandbox endpoint.
+ * Update: Binance Delivery, add sandbox endpoint.
+ * Update: Bitmex, add sandbox endpoint.
+ * Update: KrakenFutures, add sandbox endpoint.
+ * Bugfix: Bybit, the quantity for order_info stream was incorrect.
+ * Bugfix: Bitmex, timestamp was not returned in book.
+ * Bugfix: KrakenFutures, timestamp was not returned in book.
+ * Bugfix: Phemex, websocket subscription error.
+ * Bugfix: OKX, liquidations subscription was never called.
+ * Update: OKX, use publicly available channel for book updates.
+ * Bugfix: Fix race condition when resetting feeds with multiple connections
+ * Update: Send Phemex subscriptions one symbol at a time
+ * Bugfix: BitDotCom, the subscription message for perpetuals was incorrect
+ * Bugfix: Allow empty subscriptions (channel with no symbols) for FTX
+ * Update: Add SOL and USDC to Deribit symbol mapping
+
+### 2.2.2 (2022-04-17)
+ * Bugfix: OKX filled amount being reported incorrectly in OrderInfo
+ * Bugfix: Tweak QuestDB coulmn types and layout
+ * Bugfix: Fix Bybit Private Channel connections / subscriptions
+ * Bugfix: Return client order id in OrderInfo object returned by Coinbase
+ * Feature: Add Order type
+ * Feature: Add support for closed candles only in Bybit
+ * Update: Kraken Futures new instrument type: Perpetual Linear Multi-collateral Futures
+ * New Exchange: Bitget
+ * New Exchange: Independent Reserve
+ * Feature: Add perpetuals to Bitget
+ * Update: Add indicator in symbol info if instrument is a qunto
+ * Feature: Configuration option to allow invalid symbols
+ * Bugfix: use supplied timestamp from snapshot in Binance
+ * Feature: Optional multiprocessing support for backends
+ * Update: Remove unsupported backends
+ * Feature: Support checksum validation on Bitget orderbooks
+
+### 2.2.1 (2022-02-27)
+ * Feature: Support for order info stream on BitMEX
+ * Bugfix: Datetime/Timestamp conversion fixes
+ * Feature: Add support for Huobi Linear Swaps
+ * Update: Change Coinbase REST calls to use Ticker and Trade data types
+ * Bugfix: Instrument and channel filtering sometimes matched incorrectly when creating connection specific subscriptions
+ * Bugfix: retry kwargs were not correctly passed through to the async HTTP connection handler in Coinbase REST methods
+ * Update: Revamp Coinbase authenticated REST endpoints; change to use the Cython data types
+ * Feature: Add from_dict static method in Cython types to support creation of object from dict (for serialization/deserialization)
+ * Feature: New QuestDB backend
+ * Update: Exchange name change OKEx -> OKX
+ * Bugfix: OKX candle REST code was setting values incorrectly
+ * Update: OKX now uses v5 for all connections (REST and WS). Update endpoints to new exchange name: okex.com -> okx.com
+ 
+### 2.2.0 (2021-02-16)
+ * Feature: New exchange: Bit.com
+ * Feature: Rework how exchanges that have multiple websocket endpoints are managed and configured.
+ * Bugfix: Use UTC for datetime conversions in REST api
+ * Bugfix: Funding rate of 0 was being converted to None when to_dict was called
+ * Feature: Add OKEx REST API and implement candle function
+ * Feature: Added trading endpoints to Bitfinex REST mixin
+ * Bugfix: Change to Okex to allow futures and options subscriptions
+ * Update: Deribit ticker, trades, and orderbook channels now require authentication
+ * Bugfix: Fix candle backend for InfluxDB
+ * Bugfix: OKEx REST candle fix
+ * Feature: Added ability to use your own Postgres table layouts
+ * Bugfix: Binance connections that do not require websocket were failing on connect
+ * Feature: Write native datetimes to Mongo
+ * Feature: Mongo backend now supports bulk writes + queuing of messages
+
+### 2.1.2 (2021-12-23)
  * Feature: Tweak Postgres backend to not store duplicated data for orderbooks.
  * Feature: Provide sample book schema for Postgres.
  * Feature: Add subaccount info to OrderInfo and Fills data types.
@@ -216,7 +292,7 @@
   * Bugfix: Fix issue using AsyncFile callback to store raw data
   * Testing: Add exchange tests for Deribit and Binance
   * Bugfix: Fix symbol issue in Bitmex when initializing the orderbook
-  * Bugfix: Fix various issues with FTX, OKCOIN/OKEX and Huobi symbol generation
+  * Bugfix: Fix various issues with FTX, OKCOIN/OKX and Huobi symbol generation
   * Testing: Overhaul exchange tests, all exchanges are now tested with real data. Fixed various bugs as a result of this testing. Revamped AsyncFileCallback.
              Added new tool to generate test data for testing.
   * Bugfix: Improve connection cleanup in AsyncConnection object
@@ -224,7 +300,7 @@
   * Bugfix: Fix redis backends that can't handle None
   * Bugfix: Connection exceptions being ignored in Feedhandler
   * Bugfix: Binance address generation correction
-  * Bugfix: OKEX symbol generation incorrect + validate symbols used for channels that dont support all types
+  * Bugfix: OKX symbol generation incorrect + validate symbols used for channels that dont support all types
   * Breaking Change: Large rewrite of Feedhandler, Connection, and Feed. Many timeout related options moved from feedhandler to Feed. Symbol specific code
                      moved to exchange class. Rewrite of raw data collection.
   * Feature: Candle support for Huobi
@@ -261,7 +337,7 @@
   * Bugfix: Ignore untradeable symbols in Binance symbol generation
   * Feature: Add backend support for queues in Postgres. Rework postgres backend and supply example SQL file to create tables for demo
   * Bugfix: Fix ByBit symbol generation
-  * Feature: Authenticated channel support for OKEX/OKCOIN
+  * Feature: Authenticated channel support for OKX/OKCOIN
   * Update: Poloniex changed signaure of ticker data
   * Feature: Candles for Binance Futures
   * Feature: Premium Index Candle support for Binance Futures
@@ -319,9 +395,9 @@
   * Feature: KrakenFutures sequence number check added
   * Feature: Add optional caching to postgres backend
   * Feature: New Exchange - Binance Delivery
-  * Feature: Liquidation for OKEX
+  * Feature: Liquidation for OKX
   * Bugfix: Adjust ping interval on websocket connection, some exchanges require pings more frequently
-  * Feature: Checksum validation for orderbooks on OKEX and OKCoin
+  * Feature: Checksum validation for orderbooks on OKX and OKCoin
   * Feature: Use rotating log handler
   * Bugfix: Later versions of aiokafka break kafka backend
   * Bugfix: Huobi sends empty book updates for delisted pairs
@@ -432,7 +508,7 @@
   * Feature: Deribit Funding
   * Bugfix: Deribit subscriptions using config subscribed to symbols incorrectly
   * Bugfix: Some RabbitMQ messages were missing symbol and exchange data
-  * Feature: Open interest data for OKEX swaps
+  * Feature: Open interest data for OKX swaps
 
 ### 1.1.0 (2019-11-14)
   * Feature: User enabled logging of exchange messages on error

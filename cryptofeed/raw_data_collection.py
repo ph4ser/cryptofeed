@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -13,7 +13,7 @@ import ast
 from yapic import json
 from aiofile import AIOFile
 
-from cryptofeed.defines import HUOBI, UPBIT, OKEX, OKCOIN
+from cryptofeed.defines import HUOBI, UPBIT, OKX, OKCOIN
 from cryptofeed.exchanges import EXCHANGE_MAP
 
 
@@ -22,11 +22,11 @@ def bytes_string_to_bytes(string):
     return tree.body[0].value.s
 
 
-def playback(feed: str, filenames: list, callbacks: dict = None):
-    return asyncio.run(_playback(feed, filenames, callbacks))
+def playback(feed: str, filenames: list, callbacks: dict = None, config: str = 'config.yaml'):
+    return asyncio.run(_playback(feed, filenames, callbacks, config))
 
 
-async def _playback(feed: str, filenames: list, callbacks: dict):
+async def _playback(feed: str, filenames: list, callbacks: dict, config: str):
     callback_stats = defaultdict(int)
 
     class FakeWS:
@@ -66,6 +66,7 @@ async def _playback(feed: str, filenames: list, callbacks: dict):
                 for line in fp.readlines():
                     if 'configuration' in line:
                         sub = json.loads(line.split(": ", 1)[1])
+                        ws.subscription = sub
                     if line == "\n":
                         continue
                     line = line.split(": ", 1)[1]
@@ -89,7 +90,14 @@ async def _playback(feed: str, filenames: list, callbacks: dict):
     else:
         for ctype in callbacks.keys():
             callbacks[ctype] = [callbacks[ctype], functools.partial(internal_cb, cb_type=ctype)]
-    feed = EXCHANGE_MAP[feed](config="config.yaml", subscription=sub, callbacks=callbacks)
+    feed = EXCHANGE_MAP[feed](candle_closed_only=False, config=config, subscription=sub, callbacks=callbacks)
+
+    exchange_sub = {}
+    for chan in ws.subscription:
+        c = feed.std_channel_to_exchange(chan)
+        s = [feed.std_symbol_to_exchange_symbol(s) for s in sub[chan]]
+        exchange_sub[c] = s
+    ws.subscription = exchange_sub
 
     for _, sub, handler, auth in feed.connect():
         await sub(ws)
@@ -112,7 +120,7 @@ async def _playback(feed: str, filenames: list, callbacks: dict):
                     timestamp, message = line.split(": ", 1)
                     counter += 1
 
-                    if OKCOIN in filename or OKEX in filename:
+                    if OKCOIN in filename or OKX in filename:
                         if message.startswith('b\'') or message.startswith('b"'):
                             message = bytes_string_to_bytes(message)
                     elif HUOBI in filename:

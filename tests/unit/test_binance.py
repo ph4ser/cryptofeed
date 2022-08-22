@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -28,9 +28,9 @@ def test_binance_address_generation():
                 syms.append(sym)
                 chans.append(chan)
         else:
-            assert isinstance(addr, dict)
+            assert isinstance(addr, list)
 
-            for _, value in addr.items():
+            for value in addr:
                 value = value.split("=", 1)[1]
                 value = value.split("/")
                 for entry in value:

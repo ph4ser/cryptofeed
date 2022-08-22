@@ -16,8 +16,11 @@ CREATE TABLE IF NOT EXISTS index (id serial PRIMARY KEY, timestamp TIMESTAMP, re
 -- funding
 CREATE TABLE IF NOT EXISTS funding (id serial PRIMARY KEY, timestamp TIMESTAMP, receipt_timestamp TIMESTAMP, exchange VARCHAR(32), symbol VARCHAR(32), mark_price DOUBLE PRECISION, rate DOUBLE PRECISION, next_funding_time TIMESTAMP, predicted_rate DOUBLE PRECISION);
 
--- liquidation
-CREATE TABLE IF NOT EXISTS liquidation (id serial PRIMARY KEY, timestamp TIMESTAMP, receipt_timestamp TIMESTAMP, exchange VARCHAR(32), symbol VARCHAR(32), side VARCHAR(8), quantity NUMERIC(64, 32), price NUMERIC(64, 32), id VARCHAR(64), status VARCHAR(16));
+-- liquidations
+CREATE TABLE IF NOT EXISTS liquidations (id serial PRIMARY KEY, timestamp TIMESTAMP, receipt_timestamp TIMESTAMP, exchange VARCHAR(32), symbol VARCHAR(32), side VARCHAR(8), quantity NUMERIC(64, 32), price NUMERIC(64, 32), trade_id VARCHAR(64), status VARCHAR(16));
 
 -- book
 CREATE TABLE IF NOT EXISTS l2_book (id serial PRIMARY KEY, timestamp TIMESTAMP, receipt_timestamp TIMESTAMP, exchange VARCHAR(32), symbol VARCHAR(32), data JSONB);
+
+-- custom candles table, used to demonstrate custom_columns in demo_postgres.py
+CREATE TABLE IF NOT EXISTS custom_candles (ts TIMESTAMP, received TIMESTAMP, exch VARCHAR(32), pair VARCHAR(32), start TIMESTAMP, stop TIMESTAMP, o NUMERIC(64, 32), h NUMERIC(64, 32), l NUMERIC(64, 32), c NUMERIC(64, 32), v NUMERIC(64, 32), closed BOOLEAN);

@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -15,26 +15,26 @@ from decimal import Decimal
 
 from yapic import json
 
-from cryptofeed.defines import BID, ASK, BITMEX, BUY, FUNDING, FUTURES, L2_BOOK, LIQUIDATIONS, OPEN_INTEREST, PERPETUAL, SELL, TICKER, TRADES, UNFILLED
+from cryptofeed.defines import BID, ASK, BITMEX, BUY, CANCELLED, FILLED, FUNDING, FUTURES, L2_BOOK, LIMIT, LIQUIDATIONS, MARKET, OPEN, OPEN_INTEREST, ORDER_INFO, PERPETUAL, SELL, TICKER, TRADES, UNFILLED
 from cryptofeed.feed import Feed
 from cryptofeed.symbols import Symbol
-from cryptofeed.connection import AsyncConnection
+from cryptofeed.connection import AsyncConnection, RestEndpoint, Routes, WebsocketEndpoint
 from cryptofeed.exchanges.mixins.bitmex_rest import BitmexRestMixin
-from cryptofeed.types import OrderBook, Trade, Ticker, Funding, OpenInterest, Liquidation
+from cryptofeed.types import OrderBook, Trade, Ticker, Funding, OrderInfo, OpenInterest, Liquidation
 
 LOG = logging.getLogger('feedhandler')
 
 
 class Bitmex(Feed, BitmexRestMixin):
     id = BITMEX
-    symbol_endpoint = "https://www.bitmex.com/api/v1/instrument/active"
-    websocket_endpoint = 'wss://www.bitmex.com/realtime'
-    sandbox_endpoint = 'wss://testnet.bitmex.com/realtime'
+    websocket_endpoints = [WebsocketEndpoint('wss://www.bitmex.com/realtime', sandbox='wss://testnet.bitmex.com/realtime', options={'compression': None})]
+    rest_endpoints = [RestEndpoint('https://www.bitmex.com', routes=Routes('/api/v1/instrument/active'), sandbox='https://testnet.bitmex.com')]
     websocket_channels = {
         L2_BOOK: 'orderBookL2',
         TRADES: 'trade',
         TICKER: 'quote',
         FUNDING: 'funding',
+        ORDER_INFO: 'order',
         OPEN_INTEREST: 'instrument',
         LIQUIDATIONS: 'liquidation'
     }
@@ -57,20 +57,269 @@ class Bitmex(Feed, BitmexRestMixin):
             ret[s.normalized] = entry['symbol']
             info['tick_size'][s.normalized] = entry['tickSize']
             info['instrument_type'][s.normalized] = stype
+            info['is_quanto'][s.normalized] = entry['isQuanto']
 
         return ret, info
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.ws_defaults['compression'] = None
-        self._reset()
 
     def _reset(self):
         self.partial_received = defaultdict(bool)
         self.order_id = {}
+        self.open_orders = {}
         for pair in self.normalized_symbols:
             self._l2_book[pair] = OrderBook(self.id, pair, max_depth=self.max_depth)
             self.order_id[pair] = defaultdict(dict)
+
+    @staticmethod
+    def normalize_order_status(status):
+        status_map = {
+            'New': OPEN,
+            'Filled': FILLED,
+            'Canceled': CANCELLED,
+        }
+        return status_map[status]
+
+    def init_order_info(self, o):
+        oi = OrderInfo(
+            self.id,
+            self.exchange_symbol_to_std_symbol(o['symbol']),
+            o['orderID'],
+            BUY if o['side'] == 'Buy' else SELL,
+            self.normalize_order_status(o['ordStatus']),
+            LIMIT if o['ordType'].lower() == 'limit' else MARKET if o['ordType'].lower() == 'market' else None,
+            Decimal(o['avgPx']) if o['avgPx'] else Decimal(o['price']),
+            Decimal(o['orderQty']),
+            Decimal(o['leavesQty']),
+            self.timestamp_normalize(o['timestamp']),
+            raw=str(o),     # Need to convert to string to avoid json serialization error when updating order
+        )
+        return oi
+
+    async def _order(self, msg: dict, timestamp: float):
+        """
+        order msg example
+
+        {
+          "table": "order",
+          "action": "partial",
+          "keys": [
+            "orderID"
+          ],
+          "types": {
+            "orderID": "guid",
+            "clOrdID": "string",
+            "clOrdLinkID": "symbol",
+            "account": "long",
+            "symbol": "symbol",
+            "side": "symbol",
+            "simpleOrderQty": "float",
+            "orderQty": "long",
+            "price": "float",
+            "displayQty": "long",
+            "stopPx": "float",
+            "pegOffsetValue": "float",
+            "pegPriceType": "symbol",
+            "currency": "symbol",
+            "settlCurrency": "symbol",
+            "ordType": "symbol",
+            "timeInForce": "symbol",
+            "execInst": "symbol",
+            "contingencyType": "symbol",
+            "exDestination": "symbol",
+            "ordStatus": "symbol",
+            "triggered": "symbol",
+            "workingIndicator": "boolean",
+            "ordRejReason": "symbol",
+            "simpleLeavesQty": "float",
+            "leavesQty": "long",
+            "simpleCumQty": "float",
+            "cumQty": "long",
+            "avgPx": "float",
+            "multiLegReportingType": "symbol",
+            "text": "string",
+            "transactTime": "timestamp",
+            "timestamp": "timestamp"
+          },
+          "foreignKeys": {
+            "symbol": "instrument",
+            "side": "side",
+            "ordStatus": "ordStatus"
+          },
+          "attributes": {
+            "orderID": "grouped",
+            "account": "grouped",
+            "ordStatus": "grouped",
+            "workingIndicator": "grouped"
+          },
+          "filter": {
+            "account": 1600000,
+            "symbol": "ETHUSDTH22"
+          },
+          "data": [
+            {
+              "orderID": "360fad5a-49e3-4187-ad04-8fac82b8a95f",
+              "clOrdID": "",
+              "clOrdLinkID": "",
+              "account": 1600000,
+              "symbol": "ETHUSDTH22",
+              "side": "Buy",
+              "simpleOrderQty": null,
+              "orderQty": 1000,
+              "price": 2000,
+              "displayQty": null,
+              "stopPx": null,
+              "pegOffsetValue": null,
+              "pegPriceType": "",
+              "currency": "USDT",
+              "settlCurrency": "USDt",
+              "ordType": "Limit",
+              "timeInForce": "GoodTillCancel",
+              "execInst": "",
+              "contingencyType": "",
+              "exDestination": "XBME",
+              "ordStatus": "New",
+              "triggered": "",
+              "workingIndicator": true,
+              "ordRejReason": "",
+              "simpleLeavesQty": null,
+              "leavesQty": 1000,
+              "simpleCumQty": null,
+              "cumQty": 0,
+              "avgPx": null,
+              "multiLegReportingType": "SingleSecurity",
+              "text": "Submitted via API.",
+              "transactTime": "2022-02-13T00:15:02.570000Z",
+              "timestamp": "2022-02-13T00:15:02.570000Z"
+            },
+            {
+              "orderID": "74d2ad0a-49f1-44dc-820f-5f0cfd64c1a3",
+              "clOrdID": "",
+              "clOrdLinkID": "",
+              "account": 1600000,
+              "symbol": "ETHUSDTH22",
+              "side": "Buy",
+              "simpleOrderQty": null,
+              "orderQty": 1000,
+              "price": 2000,
+              "displayQty": null,
+              "stopPx": null,
+              "pegOffsetValue": null,
+              "pegPriceType": "",
+              "currency": "USDT",
+              "settlCurrency": "USDt",
+              "ordType": "Limit",
+              "timeInForce": "GoodTillCancel",
+              "execInst": "",
+              "contingencyType": "",
+              "exDestination": "XBME",
+              "ordStatus": "New",
+              "triggered": "",
+              "workingIndicator": true,
+              "ordRejReason": "",
+              "simpleLeavesQty": null,
+              "leavesQty": 1000,
+              "simpleCumQty": null,
+              "cumQty": 0,
+              "avgPx": null,
+              "multiLegReportingType": "SingleSecurity",
+              "text": "Submitted via API.",
+              "transactTime": "2022-02-13T00:17:13.796000Z",
+              "timestamp": "2022-02-13T00:17:13.796000Z"
+            }
+          ]
+        }
+
+        {
+          "table": "order",
+          "action": "insert",
+          "data": [
+            {
+              "orderID": "0c4e4a8e-b234-495f-8b94-c4766786c4a5",
+              "clOrdID": "",
+              "clOrdLinkID": "",
+              "account": 1600000,
+              "symbol": "ETHUSDTH22",
+              "side": "Buy",
+              "simpleOrderQty": null,
+              "orderQty": 1000,
+              "price": 2000,
+              "displayQty": null,
+              "stopPx": null,
+              "pegOffsetValue": null,
+              "pegPriceType": "",
+              "currency": "USDT",
+              "settlCurrency": "USDt",
+              "ordType": "Limit",
+              "timeInForce": "GoodTillCancel",
+              "execInst": "",
+              "contingencyType": "",
+              "exDestination": "XBME",
+              "ordStatus": "New",
+              "triggered": "",
+              "workingIndicator": true,
+              "ordRejReason": "",
+              "simpleLeavesQty": null,
+              "leavesQty": 1000,
+              "simpleCumQty": null,
+              "cumQty": 0,
+              "avgPx": null,
+              "multiLegReportingType": "SingleSecurity",
+              "text": "Submitted via API.",
+              "transactTime": "2022-02-13T00:21:50.268000Z",
+              "timestamp": "2022-02-13T00:21:50.268000Z"
+            }
+          ]
+        }
+
+        {
+          "table": "order",
+          "action": "update",
+          "data": [
+            {
+              "orderID": "360fa95a-49e3-4187-ad04-8fac82b8a95f",
+              "ordStatus": "Canceled",
+              "workingIndicator": false,
+              "leavesQty": 0,
+              "text": "Canceled: Cancel from www.bitmex.com\nSubmitted via API.",
+              "timestamp": "2022-02-13T08:16:36.446000Z",
+              "clOrdID": "",
+              "account": 1600000,
+              "symbol": "ETHUSDTH22"
+            }
+          ]
+        }
+
+        """
+        if msg['action'] == 'partial':
+            # Initial snapshot of open orders
+            self.open_orders = {}
+            for o in msg['data']:
+                oi = self.init_order_info(o)
+                self.open_orders[oi.id] = oi
+        elif msg['action'] == 'insert':
+            for o in msg['data']:
+                oi = self.init_order_info(o)
+                self.open_orders[oi.id] = oi
+                await self.callback(ORDER_INFO, oi, timestamp)
+        elif msg['action'] == 'update':
+            for o in msg['data']:
+                oi = self.open_orders.get(o['orderID'])
+                if oi:
+                    info = oi.to_dict()
+                    if 'ordStatus' in o:
+                        info['status'] = self.normalize_order_status(o['ordStatus'])
+                    if 'leaveQty' in o:
+                        info['remaining'] = Decimal(o['leavesQty'])
+                    if 'avgPx' in o:
+                        info['price'] = Decimal(o['avgPx'])
+                    info['raw'] = str(o)    # Not sure if this is needed
+                    new_oi = OrderInfo(**info)
+                    if new_oi.status in (FILLED, CANCELLED):
+                        self.open_orders.pop(new_oi.id)
+                    else:
+                        self.open_orders[new_oi.id] = oi
+                    await self.callback(ORDER_INFO, new_oi, timestamp)
+        else:
+            LOG.warning("%s: Unexpected message received: %s", self.id, msg)
 
     async def _trade(self, msg: dict, timestamp: float):
         """
@@ -106,6 +355,7 @@ class Bitmex(Feed, BitmexRestMixin):
     async def _book(self, msg: dict, timestamp: float):
         """
         the Full bitmex book
+        Docs, https://www.bitmex.com/app/wsAPI
         """
         # PERF perf_start(self.id, 'book_msg')
 
@@ -173,6 +423,10 @@ class Bitmex(Feed, BitmexRestMixin):
             return
         # PERF perf_end(self.id, 'book_msg')
         # PERF perf_log(self.id, 'book_msg')
+
+        self._l2_book[pair].timestamp = self.timestamp_normalize(msg["data"][0]["timestamp"]) \
+            if "data" in msg and isinstance(msg["data"], list) and msg["data"] and "timestamp" in msg["data"][0] \
+            else None
 
         await self.book_callback(L2_BOOK, self._l2_book[pair], timestamp, raw=msg, delta=delta)
 
@@ -504,6 +758,8 @@ class Bitmex(Feed, BitmexRestMixin):
         if 'table' in msg:
             if msg['table'] == 'trade':
                 await self._trade(msg, timestamp)
+            elif msg['table'] == 'order':
+                await self._order(msg, timestamp)
             elif msg['table'] == 'orderBookL2':
                 await self._book(msg, timestamp)
             elif msg['table'] == 'funding':

@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -61,6 +61,7 @@ class InfluxCallback(HTTPCallback):
         self.key = key if key else self.default_key
         self.numeric_type = float
         self.none_to = None
+        self.running = True
 
     def format(self, data):
         ret = []
@@ -73,12 +74,22 @@ class InfluxCallback(HTTPCallback):
                 ret.append(f'{key}={value}')
         return ','.join(ret)
 
-    async def write(self, data):
-        d = self.format(data)
-        timestamp = data["timestamp"]
-        timestamp_str = f',timestamp={timestamp}' if timestamp is not None else ''
-        update = f'{self.key}-{data["exchange"]},symbol={data["symbol"]} {d}{timestamp_str},receipt_timestamp={data["receipt_timestamp"]} {int(data["receipt_timestamp"] * 1000000)}'
-        await self.queue.put({'data': update, 'headers': self.headers})
+    async def writer(self):
+        while self.running:
+            async with self.read_queue() as updates:
+                for update in updates:
+                    d = self.format(update)
+                    timestamp = update["timestamp"]
+                    timestamp_str = f',timestamp={timestamp}' if timestamp is not None else ''
+
+                    if 'interval' in update:
+                        trades = f',trades={update["trades"]},' if update['trades'] else ','
+                        update = f'{self.key}-{update["exchange"]},symbol={update["symbol"]},interval={update["interval"]} start={update["start"]},stop={update["stop"]}{trades}open={update["open"]},close={update["close"]},high={update["high"]},low={update["low"]},volume={update["volume"]}{timestamp_str},receipt_timestamp={update["receipt_timestamp"]} {int(update["receipt_timestamp"] * 1000000)}'
+                    else:
+                        update = f'{self.key}-{update["exchange"]},symbol={update["symbol"]} {d}{timestamp_str},receipt_timestamp={update["receipt_timestamp"]} {int(update["receipt_timestamp"] * 1000000)}'
+
+                    await self.http_write(update, headers=self.headers)
+        await self.session.close()
 
 
 class TradeInflux(InfluxCallback, BackendCallback):
@@ -124,3 +135,19 @@ class LiquidationsInflux(InfluxCallback, BackendCallback):
 
 class CandlesInflux(InfluxCallback, BackendCallback):
     default_key = 'candles'
+
+
+class OrderInfoInflux(InfluxCallback, BackendCallback):
+    default_key = 'order_info'
+
+
+class TransactionsInflux(InfluxCallback, BackendCallback):
+    default_key = 'transactions'
+
+
+class BalancesInflux(InfluxCallback, BackendCallback):
+    default_key = 'balances'
+
+
+class FillsInflux(InfluxCallback, BackendCallback):
+    default_key = 'fills'

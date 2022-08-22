@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -41,10 +41,10 @@ class BitmexRestMixin(RestExchange):
 
         message = verb + path + str(expires) + data
 
-        signature = hmac.new(bytes(self.config.key_secret, 'utf8'), bytes(message, 'utf8'), digestmod=hashlib.sha256).hexdigest()
+        signature = hmac.new(bytes(self.key_secret, 'utf8'), bytes(message, 'utf8'), digestmod=hashlib.sha256).hexdigest()
         return {
             "api-expires": str(expires),
-            "api-key": self.config.key_id,
+            "api-key": self.key_id,
             "api-signature": signature
         }
 

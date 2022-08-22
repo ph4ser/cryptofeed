@@ -1,12 +1,12 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
 '''
 import asyncio
 from collections import defaultdict
-from cryptofeed.symbols import Symbol
+from cryptofeed.symbols import Symbol, str_to_symbol
 import logging
 import time
 from decimal import Decimal
@@ -14,7 +14,7 @@ from typing import Dict, Tuple
 
 from yapic import json
 
-from cryptofeed.connection import AsyncConnection
+from cryptofeed.connection import AsyncConnection, RestEndpoint, Routes, WebsocketEndpoint
 from cryptofeed.defines import HUOBI_SWAP, FUNDING, PERPETUAL
 from cryptofeed.exchanges.huobi_dm import HuobiDM
 from cryptofeed.types import Funding
@@ -25,8 +25,15 @@ LOG = logging.getLogger('feedhandler')
 
 class HuobiSwap(HuobiDM):
     id = HUOBI_SWAP
-    symbol_endpoint = 'https://api.hbdm.com/swap-api/v1/swap_contract_info'
-    websocket_endpoint = 'wss://api.hbdm.com/swap-ws'
+    websocket_endpoints = [
+        WebsocketEndpoint('wss://api.hbdm.com/swap-ws', instrument_filter=('QUOTE', ('USD',))),
+        WebsocketEndpoint('wss://api.hbdm.com/linear-swap-ws', instrument_filter=('QUOTE', ('USDT',)))
+    ]
+    rest_endpoints = [
+        RestEndpoint('https://api.hbdm.com', routes=Routes('/swap-api/v1/swap_contract_info', funding='/swap-api/v1/swap_funding_rate?contract_code={}'), instrument_filter=('QUOTE', ('USD',))),
+        RestEndpoint('https://api.hbdm.com', routes=Routes('/linear-swap-api/v1/swap_contract_info', funding='/linear-swap-api/v1/swap_funding_rate?contract_code={}'), instrument_filter=('QUOTE', ('USDT',)))
+    ]
+
     websocket_channels = {
         **HuobiDM.websocket_channels,
         FUNDING: 'funding'
@@ -36,14 +43,14 @@ class HuobiSwap(HuobiDM):
     def _parse_symbol_data(cls, data: dict) -> Tuple[Dict, Dict]:
         ret = {}
         info = defaultdict(dict)
-
-        for e in data['data']:
-            base, quote = e['contract_code'].split("-")
-            # Perpetual futures contract == perpetual swap
-            s = Symbol(base, quote, type=PERPETUAL)
-            ret[s.normalized] = e['contract_code']
-            info['tick_size'][e['contract_code']] = e['price_tick']
-            info['instrument_type'][s.normalized] = s.type
+        for d in data:
+            for e in d['data']:
+                base, quote = e['contract_code'].split("-")
+                # Perpetual futures contract == perpetual swap
+                s = Symbol(base, quote, type=PERPETUAL)
+                ret[s.normalized] = e['contract_code']
+                info['tick_size'][s.normalized] = e['price_tick']
+                info['instrument_type'][s.normalized] = s.type
 
         return ret, info
 
@@ -69,7 +76,14 @@ class HuobiSwap(HuobiDM):
         """
         while True:
             for pair in pairs:
-                data = await self.http_conn.read(f'https://api.hbdm.com/swap-api/v1/swap_funding_rate?contract_code={pair}')
+                # use symbol to look up correct endpoint
+                sym = str_to_symbol(self.exchange_symbol_to_std_symbol(pair))
+                endpoint = None
+                for ep in self.rest_endpoints:
+                    if sym.quote in ep.instrument_filter[1]:
+                        endpoint = self.rest_endpoints[0].route('funding').format(pair)
+
+                data = await self.http_conn.read(endpoint)
                 data = json.loads(data, parse_float=Decimal)
                 received = time.time()
                 update = (data['data']['funding_rate'], self.timestamp_normalize(int(data['data']['next_funding_time'])))

@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -36,7 +36,7 @@ def main(filename):
             if "header: " in line:
                 line = line.split("header:")[0]
             try:
-                if 'OKCOIN' in filename or 'OKEX' in filename:
+                if 'OKCOIN' in filename or 'OKX' in filename:
                     if line.startswith('b\'') or line.startswith('b"'):
                         line = bytes_string_to_bytes(line)
                         line = zlib.decompress(line, -15).decode()

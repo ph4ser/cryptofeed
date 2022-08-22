@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -106,10 +106,10 @@ class PoloniexRestMixin(RestExchange):
         payload['nonce'] = int(time.time() * 1000)
 
         paybytes = urllib.parse.urlencode(payload).encode('utf8')
-        sign = hmac.new(bytes(self.config.key_secret, 'utf8'), paybytes, hashlib.sha512).hexdigest()
+        sign = hmac.new(bytes(self.key_secret, 'utf8'), paybytes, hashlib.sha512).hexdigest()
 
         headers = {
-            "Key": self.config.key_id,
+            "Key": self.key_id,
             "Sign": sign,
             'Content-Type': 'application/x-www-form-urlencoded'
         }

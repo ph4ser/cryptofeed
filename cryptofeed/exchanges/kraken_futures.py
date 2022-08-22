@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -12,7 +12,7 @@ from typing import Dict, Tuple
 
 from yapic import json
 
-from cryptofeed.connection import AsyncConnection
+from cryptofeed.connection import AsyncConnection, RestEndpoint, Routes, WebsocketEndpoint
 from cryptofeed.defines import BID, ASK, BUY, FUNDING, FUTURES, KRAKEN_FUTURES, L2_BOOK, OPEN_INTEREST, PERPETUAL, SELL, TICKER, TRADES
 from cryptofeed.exceptions import MissingSequenceNumber
 from cryptofeed.feed import Feed
@@ -24,8 +24,8 @@ LOG = logging.getLogger('feedhandler')
 
 class KrakenFutures(Feed):
     id = KRAKEN_FUTURES
-    symbol_endpoint = 'https://futures.kraken.com/derivatives/api/v3/instruments'
-    websocket_endpoint = 'wss://futures.kraken.com/ws/v1'
+    websocket_endpoints = [WebsocketEndpoint('wss://futures.kraken.com/ws/v1', sandbox='wss://demo-futures.kraken.com/ws/v1')]
+    rest_endpoints = [RestEndpoint('https://futures.kraken.com', routes=Routes('/derivatives/api/v3/instruments'), sandbox='https://demo-futures.kraken.com')]
     websocket_channels = {
         L2_BOOK: 'book',
         TRADES: 'trade',
@@ -44,6 +44,7 @@ class KrakenFutures(Feed):
             'FI': 'Inverse Futures',
             'FV': 'Vanilla Futures',
             'PI': 'Perpetual Inverse Futures',
+            'PF': 'Perpetual Linear Multi-Collateral Futures',
             'PV': 'Perpetual Vanilla Futures',
             'IN': 'Real Time Index',
             'RR': 'Reference Rate',
@@ -68,7 +69,7 @@ class KrakenFutures(Feed):
 
             info['tick_size'][s.normalized] = entry['tickSize']
             info['contract_size'][s.normalized] = entry['contractSize']
-            info['underlying'][s.normalized] = entry['underlying']
+            info['underlying'][s.normalized] = entry.get('underlying')
             info['product_type'][s.normalized] = _kraken_futures_product_type[ftype]
             info['instrument_type'][s.normalized] = stype
             ret[s.normalized] = entry['symbol']
@@ -166,6 +167,9 @@ class KrakenFutures(Feed):
             self._l2_book[pair].book.asks = asks
         else:
             self._l2_book[pair] = OrderBook(self.id, pair, max_depth=self.max_depth, bids=bids, asks=asks)
+
+        self._l2_book[pair].timestamp = self.timestamp_normalize(msg["timestamp"]) if "timestamp" in msg else None
+
         await self.book_callback(L2_BOOK, self._l2_book[pair], timestamp, raw=msg, sequence_number=msg['seq'])
 
     async def _book(self, msg: dict, pair: str, timestamp: float):
@@ -196,6 +200,8 @@ class KrakenFutures(Feed):
         else:
             delta[s].append((price, amount))
             self._l2_book[pair].book[s][price] = amount
+
+        self._l2_book[pair].timestamp = self.timestamp_normalize(msg["timestamp"]) if "timestamp" in msg else None
 
         await self.book_callback(L2_BOOK, self._l2_book[pair], timestamp, delta=delta, sequence_number=msg['seq'], raw=msg)
 

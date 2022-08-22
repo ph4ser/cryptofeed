@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -11,7 +11,7 @@ from typing import Dict, Tuple
 from collections import defaultdict
 
 from yapic import json
-from cryptofeed.connection import AsyncConnection
+from cryptofeed.connection import AsyncConnection, RestEndpoint, Routes, WebsocketEndpoint
 
 from cryptofeed.defines import BUY, CANDLES, CRYPTODOTCOM, L2_BOOK, SELL, TICKER, TRADES
 from cryptofeed.feed import Feed
@@ -25,8 +25,9 @@ LOG = logging.getLogger('feedhandler')
 
 class CryptoDotCom(Feed):
     id = CRYPTODOTCOM
-    symbol_endpoint = 'https://api.crypto.com/v2/public/get-instruments'
-    websocket_endpoint = 'wss://stream.crypto.com/v2/market'
+    websocket_endpoints = [WebsocketEndpoint('wss://stream.crypto.com/v2/market')]
+    rest_endpoints = [RestEndpoint('https://api.crypto.com', routes=Routes('/v2/public/get-instruments'))]
+
     websocket_channels = {
         L2_BOOK: 'book',
         TRADES: 'trade',

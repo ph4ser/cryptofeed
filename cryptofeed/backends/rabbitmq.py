@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -27,7 +27,7 @@ class RabbitCallback:
             name of AMQP exchange
         exchange_type: str
             exchange type
-            String values must be one of ‘fanout’, ‘direct’, ‘topic’, ‘headers’, ‘x-delayed-message’, ‘x-consistent-hash'
+            String values must be one of 'fanout', 'direct', 'topic', 'headers', 'x-delayed-message', 'x-consistent-hash'
         routing_key: str
             definable amqp routing key
         """
@@ -100,4 +100,20 @@ class LiquidationsRabbit(RabbitCallback, BackendCallback):
 
 
 class CandlesRabbit(RabbitCallback, BackendCallback):
+    pass
+
+
+class OrderInfoRabbit(RabbitCallback, BackendCallback):
+    pass
+
+
+class TransactionsRabbit(RabbitCallback, BackendCallback):
+    pass
+
+
+class BalancesRabbit(RabbitCallback, BackendCallback):
+    pass
+
+
+class FillsRabbit(RabbitCallback, BackendCallback):
     pass

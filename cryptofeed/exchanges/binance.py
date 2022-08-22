@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -15,7 +15,7 @@ from urllib.parse import urlencode
 
 from yapic import json
 
-from cryptofeed.connection import AsyncConnection, HTTPPoll, HTTPConcurrentPoll
+from cryptofeed.connection import AsyncConnection, HTTPPoll, HTTPConcurrentPoll, RestEndpoint, Routes, WebsocketEndpoint
 from cryptofeed.defines import ASK, BALANCES, BID, BINANCE, BUY, CANDLES, FUNDING, FUTURES, L2_BOOK, LIMIT, LIQUIDATIONS, MARKET, OPEN_INTEREST, ORDER_INFO, PERPETUAL, SELL, SPOT, TICKER, TRADES, FILLED, UNFILLED
 from cryptofeed.feed import Feed
 from cryptofeed.symbols import Symbol
@@ -29,9 +29,9 @@ LOG = logging.getLogger('feedhandler')
 
 class Binance(Feed, BinanceRestMixin):
     id = BINANCE
-    symbol_endpoint = 'https://api.binance.com/api/v3/exchangeInfo'
-    websocket_endpoint = 'wss://stream.binance.com:9443'
-    listen_key_endpoint = 'userDataStream'
+    websocket_endpoints = [WebsocketEndpoint('wss://stream.binance.com:9443', sandbox='wss://testnet.binance.vision')]
+    rest_endpoints = [RestEndpoint('https://api.binance.com', routes=Routes('/api/v3/exchangeInfo', l2book='/api/v3/depth?symbol={}&limit={}', authentication='/api/v3/userDataStream'), sandbox='https://testnet.binance.vision')]
+
     valid_depths = [5, 10, 20, 50, 100, 500, 1000, 5000]
     # m -> minutes; h -> hours; d -> days; w -> weeks; M -> months
     valid_candle_intervals = {'1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'}
@@ -74,10 +74,8 @@ class Binance(Feed, BinanceRestMixin):
             info['instrument_type'][s.normalized] = stype
         return ret, info
 
-    def __init__(self, candle_closed_only=False, depth_interval='100ms', **kwargs):
+    def __init__(self, depth_interval='100ms', **kwargs):
         """
-        candle_closed_only: bool
-            return only closed candles, i.e. no updates in between intervals.
         depth_interval: str
             time between l2_book/delta updates {'100ms', '1000ms'} (different from BINANCE_FUTURES & BINANCE_DELIVERY)
         """
@@ -85,12 +83,7 @@ class Binance(Feed, BinanceRestMixin):
             raise ValueError(f"Depth interval must be one of {self.valid_depth_intervals}")
 
         super().__init__(**kwargs)
-        self.rest_endpoint = 'https://www.binance.com/api/v3'
-        self.candle_closed_only = candle_closed_only
         self.depth_interval = depth_interval
-        self.token = None
-        self.address = self._address()
-
         self._open_interest_cache = {}
         self._reset()
 
@@ -106,10 +99,10 @@ class Binance(Feed, BinanceRestMixin):
         """
         if self.requires_authentication:
             listen_key = self._generate_token()
-            address = self.websocket_endpoint if not self.sandbox else self.sandbox_endpoint
+            address = self.address
             address += '/ws/' + listen_key
         else:
-            address = self.websocket_endpoint if not self.sandbox else self.sandbox_endpoint
+            address = self.address
             address += '/stream?streams='
         subs = []
 
@@ -149,7 +142,7 @@ class Binance(Feed, BinanceRestMixin):
                 for i in range(0, len(_list), n):
                     yield _list[i:i + n]
 
-            return {chunk[0]: address + '/'.join(chunk) for chunk in split_list(subs, 200)}
+            return [address + '/'.join(chunk) for chunk in split_list(subs, 200)]
 
     def _reset(self):
         self._l2_book = {}
@@ -158,20 +151,20 @@ class Binance(Feed, BinanceRestMixin):
     async def _refresh_token(self):
         while True:
             await sleep(30 * 60)
-            if self.token is None:
+            if self._auth_token is None:
                 raise ValueError('There is no token to refresh')
-            payload = {'listenKey': self.token}
-            r = requests.put(f'{self.api}{self.listen_key_endpoint}?{urlencode(payload)}', headers={'X-MBX-APIKEY': self.key_id})
+            payload = {'listenKey': self._auth_token}
+            r = requests.put(f'{self.rest_endpoints[0].route("authentication", sandbox=self.sandbox)}?{urlencode(payload)}', headers={'X-MBX-APIKEY': self.key_id})
             r.raise_for_status()
 
     def _generate_token(self) -> str:
-        url = f'{self.api}{self.listen_key_endpoint}'
+        url = self.rest_endpoints[0].route('authentication', sandbox=self.sandbox)
         r = requests.post(url, headers={'X-MBX-APIKEY': self.key_id})
         r.raise_for_status()
         response = r.json()
         if 'listenKey' in response:
-            self.token = response['listenKey']
-            return self.token
+            self._auth_token = response['listenKey']
+            return self._auth_token
         else:
             raise ValueError(f'Unable to retrieve listenKey token from {url}')
 
@@ -286,14 +279,14 @@ class Binance(Feed, BinanceRestMixin):
                     max_depth = d
                     break
 
-        url = f'{self.rest_endpoint}/depth?symbol={pair}&limit={max_depth}'
-        resp = await self.http_conn.read(url)
+        resp = await self.http_conn.read(self.rest_endpoints[0].route('l2book', self.sandbox).format(pair, max_depth))
         resp = json.loads(resp, parse_float=Decimal)
+        timestamp = self.timestamp_normalize(resp['E']) if 'E' in resp else None
 
         std_pair = self.exchange_symbol_to_std_symbol(pair)
         self.last_update_id[std_pair] = resp['lastUpdateId']
         self._l2_book[std_pair] = OrderBook(self.id, std_pair, max_depth=self.max_depth, bids={Decimal(u[0]): Decimal(u[1]) for u in resp['bids']}, asks={Decimal(u[0]): Decimal(u[1]) for u in resp['asks']})
-        await self.book_callback(L2_BOOK, self._l2_book[std_pair], time.time(), timestamp=None, raw=resp, sequence_number=self.last_update_id[std_pair])
+        await self.book_callback(L2_BOOK, self._l2_book[std_pair], time.time(), timestamp=timestamp, raw=resp, sequence_number=self.last_update_id[std_pair])
 
     async def _book(self, msg: dict, pair: str, timestamp: float):
         """
@@ -333,14 +326,13 @@ class Binance(Feed, BinanceRestMixin):
             for update in msg[s]:
                 price = Decimal(update[0])
                 amount = Decimal(update[1])
+                delta[side].append((price, amount))
 
                 if amount == 0:
                     if price in self._l2_book[pair].book[side]:
                         del self._l2_book[pair].book[side][price]
-                        delta[side].append((price, amount))
                 else:
                     self._l2_book[pair].book[side][price] = amount
-                    delta[side].append((price, amount))
 
         await self.book_callback(L2_BOOK, self._l2_book[pair], timestamp, timestamp=self.timestamp_normalize(msg['E']), raw=msg, delta=delta, sequence_number=self.last_update_id[pair])
 

@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -9,7 +9,7 @@ import glob
 
 import pytest
 
-from cryptofeed.defines import ASCENDEX, BEQUANT, BITHUMB, CANDLES, BINANCE, BINANCE_DELIVERY, CRYPTODOTCOM, DELTA, FMFW, BITFINEX, DYDX, EXX, BINANCE_FUTURES, BINANCE_US, BITFLYER, BITMEX, BITSTAMP, BITTREX, BLOCKCHAIN, COINBASE, DERIBIT, FTX_US, FTX, GATEIO, GEMINI, HITBTC, HUOBI, HUOBI_DM, HUOBI_SWAP, KRAKEN, KRAKEN_FUTURES, KUCOIN, OKCOIN, OKEX, OPEN_INTEREST, PHEMEX, POLONIEX, PROBIT, TICKER, TRADES, L2_BOOK, BYBIT, UPBIT
+from cryptofeed.defines import ASCENDEX, ASCENDEX_FUTURES, BEQUANT, BITDOTCOM, BITGET, BITHUMB, CANDLES, BINANCE, BINANCE_DELIVERY, CRYPTODOTCOM, DELTA, FMFW, BITFINEX, DYDX, EXX, BINANCE_FUTURES, BINANCE_US, BITFLYER, BITMEX, BITSTAMP, BITTREX, BLOCKCHAIN, COINBASE, DERIBIT, FTX_TR, FTX_US, FTX, GATEIO, GEMINI, HITBTC, HUOBI, HUOBI_DM, HUOBI_SWAP, INDEPENDENT_RESERVE, KRAKEN, KRAKEN_FUTURES, KUCOIN, L3_BOOK, OKCOIN, OKX, PHEMEX, POLONIEX, PROBIT, TICKER, TRADES, L2_BOOK, BYBIT, UPBIT
 from cryptofeed.exchanges import EXCHANGE_MAP
 from cryptofeed.raw_data_collection import playback
 from cryptofeed.symbols import Symbols
@@ -28,8 +28,11 @@ lookup_table = {
     BITFINEX: {L2_BOOK: 1600, TICKER: 21, TRADES: 210},
     BITFLYER: {L2_BOOK: 749, TICKER: 249, TRADES: 162},
     ASCENDEX: {L2_BOOK: 279, TRADES: 4},
+    ASCENDEX_FUTURES: {L2_BOOK: 261, TRADES: 12},
+    BITDOTCOM: {L2_BOOK: 46, TICKER: 61},
+    BITGET: {CANDLES: 10060, L2_BOOK: 637, TICKER: 345, TRADES: 555},
     BITMEX: {L2_BOOK: 1979, TICKER: 436, TRADES: 27},
-    BITSTAMP: {TRADES: 16, L2_BOOK: 548},
+    BITSTAMP: {TRADES: 10, L2_BOOK: 627},
     BITTREX: {TICKER: 162, CANDLES: 20, L2_BOOK: 1014},
     BLOCKCHAIN: {L2_BOOK: 78},
     BYBIT: {TRADES: 251, L2_BOOK: 4278},
@@ -39,16 +42,18 @@ lookup_table = {
     DERIBIT: {L2_BOOK: 46, TICKER: 89},
     DYDX: {L2_BOOK: 4663, TRADES: 1026},
     FTX: {L2_BOOK: 971, TICKER: 988, TRADES: 7},
+    FTX_TR: {L2_BOOK: 2811, TICKER: 2859, TRADES: 165},
     FTX_US: {L2_BOOK: 415, TICKER: 421},
     GEMINI: {L2_BOOK: 655, TRADES: 16},
     HITBTC: {L2_BOOK: 527, TICKER: 812, TRADES: 4000, CANDLES: 4000},
     HUOBI_DM:  {L2_BOOK: 4614, TRADES: 67},
-    HUOBI_SWAP:  {L2_BOOK: 3977, TRADES: 67},
+    HUOBI_SWAP:  {L2_BOOK: 2862, TRADES: 25},
     HUOBI: {L2_BOOK: 292, TRADES: 73},
+    INDEPENDENT_RESERVE: {L3_BOOK: 1631},
     KRAKEN_FUTURES: {TICKER: 107, TRADES: 3, L2_BOOK: 7024},
     KRAKEN: {L2_BOOK: 4279, TICKER: 18, TRADES: 10},
     OKCOIN: {L2_BOOK: 3161, TICKER: 63, TRADES: 30},
-    OKEX: {L2_BOOK: 4372, TICKER: 139, TRADES: 108},    
+    OKX: {L2_BOOK: 290, TICKER: 28, TRADES: 74},
     POLONIEX: {TICKER: 68, TRADES: 1, L2_BOOK: 165},
     UPBIT:  {L2_BOOK: 145, TRADES: 304},
     GATEIO: {CANDLES: 14, L2_BOOK: 169, TICKER: 22, TRADES: 9},
@@ -81,7 +86,7 @@ def test_exchange_playback(exchange):
     dir = os.path.dirname(os.path.realpath(__file__))
     pcap = glob.glob(f"{dir}/../../sample_data/{exchange}.*")
 
-    results = playback(exchange, pcap)
+    results = playback(exchange, pcap, config="tests/config_test.yaml")
     message_count = get_message_count(pcap)
 
     assert results['messages_processed'] == message_count

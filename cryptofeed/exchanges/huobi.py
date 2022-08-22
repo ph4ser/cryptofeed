@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from yapic import json
 
-from cryptofeed.connection import AsyncConnection
+from cryptofeed.connection import AsyncConnection, RestEndpoint, Routes, WebsocketEndpoint
 from cryptofeed.defines import BUY, CANDLES, HUOBI, L2_BOOK, SELL, TRADES, TICKER
 from cryptofeed.feed import Feed
 from cryptofeed.types import OrderBook, Trade, Candle, Ticker
@@ -24,8 +24,9 @@ LOG = logging.getLogger('feedhandler')
 
 class Huobi(Feed):
     id = HUOBI
-    symbol_endpoint = 'https://api.huobi.pro/v1/common/symbols'
-    websocket_endpoint = 'wss://api.huobi.pro/ws'
+    websocket_endpoints = [WebsocketEndpoint('wss://api.huobi.pro/ws')]
+    rest_endpoints = [RestEndpoint('https://api.huobi.pro', routes=Routes('/v1/common/symbols'))]
+
     valid_candle_intervals = {'1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1M', '1Y'}
     candle_interval_map = {'1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min', '1h': '60min', '4h': '4hour', '1d': '1day', '1M': '1mon', '1w': '1week', '1Y': '1year'}
     websocket_channels = {
@@ -67,7 +68,7 @@ class Huobi(Feed):
         self._l2_book[pair].book.asks = {Decimal(price): Decimal(amount) for price, amount in data['asks']}
 
         await self.book_callback(L2_BOOK, self._l2_book[pair], timestamp, timestamp=self.timestamp_normalize(msg['ts']), raw=msg)
-    
+
     async def _ticker(self, msg: dict, timestamp: float):
         """
         {

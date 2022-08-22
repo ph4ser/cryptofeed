@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -69,21 +69,25 @@ class SocketCallback(BackendQueue):
         self.numeric_type = numeric_type
         self.none_to = none_to
         self.key = key if key else self.default_key
+        self.running = True
 
     async def writer(self):
-        while True:
+        while self.running:
             await self.connect()
-            async with self.read_queue() as update:
-                if self.conn_type == 'udp://':
-                    if len(update) > self.mtu:
-                        chunks = wrap(update, self.mtu)
-                        for chunk in chunks:
-                            msg = json.dumps({'type': 'chunked', 'chunks': len(chunks), 'data': chunk}).encode()
-                            self.conn.sendto(msg)
+            async with self.read_queue() as updates:
+                for update in updates:
+                    data = {'type': self.key, 'data': update}
+                    data = json.dumps(data)
+                    if self.conn_type == 'udp://':
+                        if len(update) > self.mtu:
+                            chunks = wrap(update, self.mtu)
+                            for chunk in chunks:
+                                msg = json.dumps({'type': 'chunked', 'chunks': len(chunks), 'data': chunk}).encode()
+                                self.conn.sendto(msg)
+                        else:
+                            self.conn.sendto(update.encode())
                     else:
-                        self.conn.sendto(update.encode())
-                else:
-                    self.conn.write(update.encode())
+                        self.conn.write(update.encode())
 
     async def connect(self):
         if not self.conn:
@@ -95,11 +99,6 @@ class SocketCallback(BackendQueue):
                 _, self.conn = await asyncio.open_connection(host=self.addr, port=self.port)
             elif self.conn_type == 'uds://':
                 _, self.conn = await asyncio.open_unix_connection(path=self.addr)
-
-    async def write(self, data: dict):
-        data = {'type': self.key, 'data': data}
-        data = json.dumps(data)
-        await self.queue.put(data)
 
 
 class TradeSocket(SocketCallback, BackendCallback):
@@ -134,3 +133,19 @@ class LiquidationsSocket(SocketCallback, BackendCallback):
 
 class CandlesSocket(SocketCallback, BackendCallback):
     default_key = 'candles'
+
+
+class OrderInfoSocket(SocketCallback, BackendCallback):
+    default_key = 'order_info'
+
+
+class TransactionsSocket(SocketCallback, BackendCallback):
+    default_key = 'transactions'
+
+
+class BalancesSocket(SocketCallback, BackendCallback):
+    default_key = 'balances'
+
+
+class FillsSocket(SocketCallback, BackendCallback):
+    default_key = 'fills'

@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2018-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2018-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -11,7 +11,7 @@ from typing import Dict, Tuple
 
 from yapic import json
 
-from cryptofeed.connection import AsyncConnection
+from cryptofeed.connection import AsyncConnection, RestEndpoint, Routes, WebsocketEndpoint
 from cryptofeed.defines import BID, ASK, BUY, BITFLYER, FUTURES, TICKER, L2_BOOK, SELL, TRADES, FX
 from cryptofeed.feed import Feed
 from cryptofeed.symbols import Symbol
@@ -23,8 +23,8 @@ LOG = logging.getLogger('feedhandler')
 
 class Bitflyer(Feed):
     id = BITFLYER
-    symbol_endpoint = endpoints = ['https://api.bitflyer.com/v1/getmarkets/eu', 'https://api.bitflyer.com/v1/getmarkets/usa', 'https://api.bitflyer.com/v1/getmarkets', 'https://api.bitflyer.com/v1/markets', 'https://api.bitflyer.com/v1/markets/usa', 'https://api.bitflyer.com/v1/markets/eu']
-    websocket_endpoint = 'wss://ws.lightstream.bitflyer.com/json-rpc'
+    websocket_endpoints = [WebsocketEndpoint('wss://ws.lightstream.bitflyer.com/json-rpc')]
+    rest_endpoints = [RestEndpoint('https://api.bitflyer.com', routes=Routes(['/v1/getmarkets/eu', '/v1/getmarkets/usa', '/v1/getmarkets', '/v1/markets', '/v1/markets/usa', '/v1/markets/eu']))]
     websocket_channels = {
         L2_BOOK: 'lightning_board_{}',
         TRADES: 'lightning_executions_{}',

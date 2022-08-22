@@ -1,5 +1,5 @@
 '''
-Copyright (C) 2017-2021  Bryant Moscon - bmoscon@gmail.com
+Copyright (C) 2017-2022 Bryant Moscon - bmoscon@gmail.com
 
 Please see the LICENSE file for the terms and conditions
 associated with this software.
@@ -17,7 +17,7 @@ from websockets.exceptions import InvalidStatusCode
 
 from cryptofeed.connection import AsyncConnection
 from cryptofeed.exceptions import ExhaustedRetries
-from cryptofeed.defines import HUOBI, HUOBI_DM, HUOBI_SWAP, OKCOIN, OKEX
+from cryptofeed.defines import HUOBI, HUOBI_DM, HUOBI_SWAP, OKCOIN, OKX
 
 
 LOG = logging.getLogger('feedhandler')
@@ -123,7 +123,7 @@ class ConnectionHandler:
             if self.log_on_error:
                 if connection.uuid in {HUOBI, HUOBI_DM, HUOBI_SWAP}:
                     message = zlib.decompress(message, 16 + zlib.MAX_WBITS)
-                elif connection.uuid in {OKCOIN, OKEX}:
+                elif connection.uuid in {OKCOIN, OKX}:
                     message = zlib.decompress(message, -15)
                 LOG.error("%s: error handling message %s", connection.uuid, message)
             # exception will be logged with traceback when connection handler
