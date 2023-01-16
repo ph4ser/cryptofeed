@@ -1,11 +1,26 @@
 ## Changelog
 
-### 2.3.0
+### 2.3.2
+ * Bugfix: Fix AUCTION symbol parsing on Coinbase
+ * Bugfix: Fix PERPETUAL symbol parsing on Phemex
+ * Feature: Access to all AIOKafka configuration options
+ * Feature: Use backend Queue for Kafka
+
+### 2.3.1 (2022-10-31)
+ * Bugfix: timestamp not reset correctly on reconnect
+ * Bugfix: Arctic backend failing to write Trades when trade type was not present in data
+ * Bugfix: Timestamp sometimes not present in Coinbase ticker updates
+ * Bugfix: Phemex, symbols parsing
+ * Bugfix: OKx - handle empty liquidations correctly
+
+### 2.3.0 (2022-09-04)
  * Bugfix: added list and str support to websocket_endpoint creation (allows more than 200 symbols on Binance)
  * Feature: Add support for OKx streaming candles
  * Bugfix: Binance Futures, double slash in open interest url
  * Update: Set 'next_funding_rate' to None in Bybit if not present
- * Bugfix: Bitget, bug in subscribe method.
+ * Feature: Added authentication to private channels of Bittrex. ORDER_INFO and BALANCES implemented.
+ * Bugfix: Bitget, bug in subscribe method
+ * Update: Poloniex API update
 
 ### 2.2.3 (2022-05-29)
  * Feature: Authenticated channel support for Bitget
